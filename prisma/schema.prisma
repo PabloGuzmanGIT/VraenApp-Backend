@@ -11,13 +11,63 @@ datasource db {
 }
 
 // ============================================
-// USER & ORGANIZATION MODELS
+// ENUMS
 // ============================================
 
 enum Role {
   ADMIN
   OPERATOR
 }
+
+enum OperationStatus {
+  OPEN       // En curso
+  CLOSED     // Finalizada
+}
+
+enum MoneyMovementType {
+  ADVANCE    // Adelanto
+  PAYMENT    // Pago
+  ADJUSTMENT // Ajuste
+  DISCOUNT   // Descuento
+}
+
+enum ProductMovementType {
+  DELIVERY   // Entrega
+  ADJUSTMENT // Ajuste
+  LOSS       // Merma
+}
+
+enum PaymentMethod {
+  CASH       // Efectivo
+  TRANSFER   // Transferencia
+}
+
+enum SaleStatus {
+  PENDING    // Pendiente de pago
+  PARTIAL    // Pago parcial
+  COMPLETED  // Pagado
+}
+
+enum ExpenseScope {
+  BUSINESS   // Gasto de negocio
+  PERSONAL   // Gasto personal
+}
+
+enum ExpenseType {
+  FREIGHT    // Flete
+  TRANSPORT  // Transporte
+  FOOD       // Alimentación
+  OTHER      // Otros
+}
+
+enum IncomeScope {
+  BUSINESS   // Ingreso de negocio
+  PERSONAL   // Ingreso personal
+}
+
+// ============================================
+// USER & ORGANIZATION MODELS
+// ============================================
 
 model User {
   id        String   @id @default(uuid())
@@ -27,28 +77,25 @@ model User {
   phone     String?
   role      Role     @default(OPERATOR)
   
-  // Geolocation
-  latitude  Float?
-  longitude Float?
-  address   String?
+  // Preferences
+  language  String   @default("es")
+  theme     String   @default("light")
   
   // Push Notifications
   pushToken String?
-  
-  // Preferences
-  language  String   @default("es") // 'es' | 'en'
-  theme     String   @default("light") // 'light' | 'dark'
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
   // Relations
-  createdOrganizations Organization[]        @relation("OrganizationCreator")
-  memberships          OrganizationMember[]
-  transactions         Transaction[]
-  providers            Provider[]
-  expenseCategories    ExpenseCategory[]
-  productServices      ProductService[]
+  organizations   OrganizationMember[]
+  operations      Operation[]
+  sales           Sale[]
+  expenses        Expense[]
+  incomes         Income[]
+  providers       Provider[]
+  clients         Client[]
+  products        Product[]
   
   @@index([email])
 }
@@ -58,18 +105,11 @@ model Organization {
   name        String
   description String?
   
-  createdById String
-  createdBy   User     @relation("OrganizationCreator", fields: [createdById], references: [id], onDelete: Cascade)
-  
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
   // Relations
-  members      OrganizationMember[]
-  transactions Transaction[]
-  providers    Provider[]
-  
-  @@index([createdById])
+  members     OrganizationMember[]
 }
 
 model OrganizationMember {
@@ -85,222 +125,270 @@ model OrganizationMember {
   joinedAt       DateTime @default(now())
   
   @@unique([userId, organizationId])
-  @@index([userId])
-  @@index([organizationId])
 }
 
 // ============================================
-// PROVIDER MODEL
+// PRODUCT MODEL (Cacao, Coffee, etc.)
 // ============================================
 
-model Provider {
+model Product {
   id          String   @id @default(uuid())
-  name        String
-  email       String?
-  phone       String?
-  address     String?
-  notes       String?
+  name        String   // "Cacao", "Café", etc.
+  unit        String   @default("kg") // kg, unidades, etc.
+  description String?
   
-  // Owner (can be user or organization)
-  userId         String?
-  user           User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  organizationId String?
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
   // Relations
-  transactions Transaction[]
+  operations  Operation[]
+  sales       Sale[]
   
   @@index([userId])
-  @@index([organizationId])
 }
 
 // ============================================
-// TRANSACTION MODELS
+// PROVIDER MODEL (Productores/Proveedores)
 // ============================================
 
-enum TransactionStatus {
-  ACTIVE
-  CLOSED
-}
-
-model Transaction {
-  id              String            @id @default(uuid())
-  contractNumber  String            @unique // YYYYMMDD-UUID format
-  description     String?
-  status          TransactionStatus @default(ACTIVE)
-  
-  // Product/Service
-  productServiceId String?
-  productService   ProductService?  @relation(fields: [productServiceId], references: [id], onDelete: SetNull)
-  
-  // Quantities and pricing
-  quantity        Float?            // kg, units, etc.
-  unitPrice       Float?
-  totalAmount     Float?
-  
-  // Dates
-  transactionDate DateTime          @default(now())
-  closedAt        DateTime?
-  
-  // Signature & Photos
-  signatureUrl    String?
-  
-  // Owner
-  userId          String
-  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  organizationId  String?
-  organization    Organization?     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  
-  providerId      String
-  provider        Provider          @relation(fields: [providerId], references: [id], onDelete: Restrict)
-  
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  
-  // Relations
-  advances        Advance[]
-  deliveries      Delivery[]
-  expenses        Expense[]
-  attachments     Attachment[]
-  
-  @@index([userId])
-  @@index([organizationId])
-  @@index([providerId])
-  @@index([contractNumber])
-  @@index([status])
-}
-
-// ============================================
-// ADVANCE (Adelanto) MODEL
-// ============================================
-
-model Advance {
-  id             String      @id @default(uuid())
-  amount         Float
-  description    String?
-  advanceDate    DateTime    @default(now())
-  
-  transactionId  String
-  transaction    Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-  
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-  
-  @@index([transactionId])
-}
-
-// ============================================
-// DELIVERY (Entrega) MODEL
-// ============================================
-
-model Delivery {
-  id             String      @id @default(uuid())
-  quantity       Float       // kg, units, etc.
-  description    String?
-  deliveryDate   DateTime    @default(now())
-  
-  transactionId  String
-  transaction    Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-  
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-  
-  @@index([transactionId])
-}
-
-// ============================================
-// EXPENSE MODELS
-// ============================================
-
-model ExpenseCategory {
+model Provider {
   id          String   @id @default(uuid())
   name        String
-  nameEn      String?  // English translation
-  isDefault   Boolean  @default(false)
+  phone       String?
+  address     String?
+  notes       String?
   
-  // If userId is null, it's a default category
-  userId      String?
-  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  createdAt   DateTime @default(now())
-  
-  // Relations
-  expenses    Expense[]
-  
-  @@index([userId])
-}
-
-model Expense {
-  id             String           @id @default(uuid())
-  amount         Float
-  description    String?
-  expenseDate    DateTime         @default(now())
-  
-  categoryId     String
-  category       ExpenseCategory  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  
-  // Can be associated with a transaction or be general
-  transactionId  String?
-  transaction    Transaction?     @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-  
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  
-  @@index([transactionId])
-  @@index([categoryId])
-}
-
-// ============================================
-// PRODUCT/SERVICE MODEL
-// ============================================
-
-model ProductService {
-  id          String   @id @default(uuid())
-  name        String
-  type        String   @default("product") // 'product' | 'service'
-  description String?
-  
-  // Owner
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
   
   // Relations
-  transactions Transaction[]
+  operations  Operation[]
   
   @@index([userId])
 }
 
 // ============================================
-// ATTACHMENT MODEL (Photos, Documents)
+// CLIENT MODEL (Compradores)
 // ============================================
 
-enum AttachmentType {
-  PHOTO
-  SIGNATURE
-  DOCUMENT
+model Client {
+  id          String   @id @default(uuid())
+  name        String
+  phone       String?
+  address     String?
+  notes       String?
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  sales       Sale[]
+  
+  @@index([userId])
 }
 
-model Attachment {
-  id             String         @id @default(uuid())
-  type           AttachmentType @default(PHOTO)
-  url            String
-  filename       String
-  mimeType       String?
-  size           Int?           // bytes
+// ============================================
+// OPERATION MODEL (Operación de Compra)
+// ============================================
+
+model Operation {
+  id              String           @id @default(uuid())
+  operationNumber String           @unique
+  status          OperationStatus  @default(OPEN)
   
-  transactionId  String
-  transaction    Transaction    @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  // Product and pricing
+  productId       String
+  product         Product          @relation(fields: [productId], references: [id], onDelete: Restrict)
+  pricePerUnit    Float            // Precio acordado por kg/unidad
+  agreedQuantity  Float?           // Cantidad acordada (opcional)
   
-  createdAt      DateTime       @default(now())
+  // Provider
+  providerId      String
+  provider        Provider         @relation(fields: [providerId], references: [id], onDelete: Restrict)
   
-  @@index([transactionId])
+  // Owner
+  userId          String
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Dates
+  operationDate   DateTime         @default(now())
+  closedAt        DateTime?
+  
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  
+  // Relations
+  moneyMovements    MoneyMovement[]
+  productMovements  ProductMovement[]
+  expenses          Expense[]
+  
+  @@index([userId])
+  @@index([providerId])
+  @@index([productId])
+  @@index([status])
+}
+
+// ============================================
+// MONEY MOVEMENT (Adelantos, Pagos, Ajustes)
+// ============================================
+
+model MoneyMovement {
+  id             String            @id @default(uuid())
+  amount         Float
+  movementType   MoneyMovementType
+  paymentMethod  PaymentMethod     @default(CASH)
+  description    String
+  movementDate   DateTime          @default(now())
+  
+  operationId    String
+  operation      Operation         @relation(fields: [operationId], references: [id], onDelete: Cascade)
+  
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  
+  @@index([operationId])
+  @@index([movementDate])
+}
+
+// ============================================
+// PRODUCT MOVEMENT (Entregas, Ajustes, Mermas)
+// ============================================
+
+model ProductMovement {
+  id             String               @id @default(uuid())
+  netWeight      Float                // Peso neto (el que cuenta)
+  grossWeight    Float?               // Peso bruto
+  tare           Float?               // Tara
+  movementType   ProductMovementType
+  description    String
+  movementDate   DateTime             @default(now())
+  
+  operationId    String
+  operation      Operation            @relation(fields: [operationId], references: [id], onDelete: Cascade)
+  
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  
+  @@index([operationId])
+  @@index([movementDate])
+}
+
+// ============================================
+// SALE MODEL (Ventas)
+// ============================================
+
+model Sale {
+  id              String     @id @default(uuid())
+  saleNumber      String     @unique
+  status          SaleStatus @default(PENDING)
+  
+  // Product and quantity
+  productId       String
+  product         Product    @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity        Float      // Cantidad vendida
+  pricePerUnit    Float      // Precio de venta
+  totalAmount     Float      // quantity * pricePerUnit
+  
+  // Client
+  clientId        String
+  client          Client     @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  
+  // Owner
+  userId          String
+  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  saleDate        DateTime   @default(now())
+  
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  
+  // Relations
+  payments        SalePayment[]
+  
+  @@index([userId])
+  @@index([clientId])
+  @@index([productId])
+  @@index([status])
+}
+
+// ============================================
+// SALE PAYMENT (Pagos de Ventas)
+// ============================================
+
+model SalePayment {
+  id             String        @id @default(uuid())
+  amount         Float
+  paymentMethod  PaymentMethod
+  description    String?
+  paymentDate    DateTime      @default(now())
+  
+  saleId         String
+  sale           Sale          @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  
+  createdAt      DateTime      @default(now())
+  
+  @@index([saleId])
+}
+
+// ============================================
+// EXPENSE (Gastos - Negocio y Personal)
+// ============================================
+
+model Expense {
+  id             String       @id @default(uuid())
+  amount         Float
+  expenseType    ExpenseType  @default(OTHER)
+  scope          ExpenseScope @default(BUSINESS)
+  description    String
+  expenseDate    DateTime     @default(now())
+  
+  // Optional: linked to operation
+  operationId    String?
+  operation      Operation?   @relation(fields: [operationId], references: [id], onDelete: SetNull)
+  
+  // Owner
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  
+  @@index([userId])
+  @@index([operationId])
+  @@index([scope])
+  @@index([expenseDate])
+}
+
+// ============================================
+// INCOME (Ingresos Personales - no ventas)
+// ============================================
+
+model Income {
+  id            String      @id @default(uuid())
+  amount        Float
+  scope         IncomeScope @default(PERSONAL)
+  description   String
+  incomeDate    DateTime    @default(now())
+  
+  // Owner
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  
+  @@index([userId])
+  @@index([scope])
+  @@index([incomeDate])
 }
 
 // ============================================
@@ -320,27 +408,4 @@ model SyncLog {
   
   @@index([userId])
   @@index([createdAt])
-}
-
-// ============================================
-// ANALYTICS DATA (Anonymous aggregated data)
-// ============================================
-
-model AnalyticsData {
-  id             String   @id @default(uuid())
-  region         String?  // e.g., "Vraem", "San Martin"
-  productType    String?
-  
-  // Aggregated data (no personal info)
-  totalVolume    Float?   // kg
-  averagePrice   Float?
-  transactionCount Int?
-  
-  periodStart    DateTime
-  periodEnd      DateTime
-  
-  createdAt      DateTime @default(now())
-  
-  @@index([region])
-  @@index([periodStart])
 }

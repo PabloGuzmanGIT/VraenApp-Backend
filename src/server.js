@@ -7,6 +7,12 @@ import { errorHandler, notFoundHandler } from './middleware/validation.js';
 
 // Import routes
 import authRoutes from './routes/auth.js';
+import organizationRoutes from './routes/organizations.js';
+import providerRoutes from './routes/providers.js';
+import transactionRoutes from './routes/transactions.js';
+import expenseRoutes from './routes/expenses.js';
+import syncRoutes from './routes/sync.js';
+import analyticsRoutes from './routes/analytics.js';
 
 // Load environment variables
 dotenv.config();
@@ -74,16 +80,12 @@ app.get('/api-docs.json', (req, res) => {
 // ============================================
 
 app.use('/api/auth', authRoutes);
-
-// TODO: Add more routes
-// app.use('/api/users', userRoutes);
-// app.use('/api/organizations', organizationRoutes);
-// app.use('/api/transactions', transactionRoutes);
-// app.use('/api/providers', providerRoutes);
-// app.use('/api/expenses', expenseRoutes);
-// app.use('/api/sync', syncRoutes);
-// app.use('/api/analytics', analyticsRoutes);
-// app.use('/api/uploads', uploadRoutes);
+app.use('/api/organizations', organizationRoutes);
+app.use('/api/providers', providerRoutes);
+app.use('/api/transactions', transactionRoutes);
+app.use('/api/expenses', expenseRoutes);
+app.use('/api/sync', syncRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // ============================================
 // ERROR HANDLING
